@@ -20,6 +20,9 @@ Setup:
 import os
 import logging
 import asyncio
+import threading
+
+from flask import Flask, jsonify
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -46,6 +49,24 @@ WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://deluxe-fenglisu-ff2ca7.netl
 SUPPORT_USERNAME = "AlamutTeamir"  # without @
 CHANNEL_USERNAME = "Alamutir"  # without @ - channel for forced join
 AUTO_DELETE_SECONDS = 10
+PORT = int(os.environ.get("PORT", 8080))
+
+# ----------------------------------------------------------------------
+# Flask Web Server for Render (Keep-Alive)
+# ----------------------------------------------------------------------
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Alamut Bot is running!", 200
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok", "bot": "AlamutReportBot"}), 200
+
+def run_flask():
+    """Run Flask app on port for Render"""
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
 
 # ----------------------------------------------------------------------
 # Violation Categories (matching Telegram's official reporting options)
@@ -1742,21 +1763,25 @@ async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def delete_message_later(context: ContextTypes.DEFAULT_TYPE):
+    """حذف پیام بعد از زمان مشخص"""
     job = context.job
     chat_id, message_id = job.data
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        logger.info(f"✅ Deleted message {message_id} in chat {chat_id}")
     except Exception as exc:
-        logger.warning("Could not delete message %s in chat %s: %s", message_id, chat_id, exc)
+        logger.warning(f"Could not delete message {message_id} in chat {chat_id}: {exc}")
 
 
 async def delete_notice_later(context: ContextTypes.DEFAULT_TYPE):
+    """حذف پیام هشدار بعد از زمان مشخص"""
     job = context.job
     chat_id, message_id = job.data
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        logger.info(f"✅ Deleted notice {message_id} in chat {chat_id}")
     except Exception as exc:
-        logger.warning("Could not delete notice %s in chat %s: %s", message_id, chat_id, exc)
+        logger.warning(f"Could not delete notice {message_id} in chat {chat_id}: {exc}")
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1844,18 +1869,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=notice_text,
         )
 
-        # Schedule deletion of both messages
-        context.job_queue.run_once(
-            delete_message_later,
-            when=AUTO_DELETE_SECONDS,
-            data=(sent_message.chat_id, sent_message.message_id),
-        )
-        context.job_queue.run_once(
-            delete_notice_later,
-            when=AUTO_DELETE_SECONDS,
-            data=(notice_message.chat_id, notice_message.message_id),
-        )
+        # Schedule deletion of both messages using JobQueue
+        try:
+            context.job_queue.run_once(
+                delete_message_later,
+                when=AUTO_DELETE_SECONDS,
+                data=(sent_message.chat_id, sent_message.message_id),
+            )
+            context.job_queue.run_once(
+                delete_notice_later,
+                when=AUTO_DELETE_SECONDS,
+                data=(notice_message.chat_id, notice_message.message_id),
+            )
+            logger.info(f"⏰ Scheduled deletion for messages in {AUTO_DELETE_SECONDS} seconds")
+        except Exception as e:
+            logger.error(f"❌ Failed to schedule deletion: {e}")
+        
         return
+
+
+async def post_init(application: Application):
+    """This runs after the Application is initialized"""
+    logger.info("✅ Bot is ready and JobQueue is active!")
 
 
 def main():
@@ -1864,14 +1899,32 @@ def main():
             "Please set BOT_TOKEN in bot.py or as an environment variable."
         )
 
-    application = Application.builder().token(BOT_TOKEN).build()
+    # Start Flask server in a separate thread (for Render keep-alive)
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    logger.info("🌐 Flask web server started on port 8080 for Render keep-alive")
+
+    # ✅ Create Application with JobQueue properly initialized
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(CallbackQueryHandler(check_membership, pattern="^check_membership$"))
 
-    logger.info("Bot is starting...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("🤖 Bot is starting with Polling + Keep-Alive...")
+    application.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+        read_timeout=30,
+        write_timeout=30,
+        connect_timeout=30,
+        pool_timeout=30,
+    )
 
 
 if __name__ == "__main__":
