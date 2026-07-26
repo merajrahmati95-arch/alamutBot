@@ -1904,7 +1904,7 @@ def main():
     flask_thread.start()
     logger.info("🌐 Flask web server started on port 8080 for Render keep-alive")
 
-    # ✅ Create Application with JobQueue properly initialized
+    # Create Application with JobQueue properly initialized
     application = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -1917,14 +1917,9 @@ def main():
     application.add_handler(CallbackQueryHandler(check_membership, pattern="^check_membership$"))
 
     logger.info("🤖 Bot is starting with Polling + Keep-Alive...")
-    application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
-        read_timeout=30,
-        write_timeout=30,
-        connect_timeout=30,
-        pool_timeout=30,
-    )
+    
+    # ✅ ساده‌ترین حالت ممکن - بدون پارامترهای اضافی
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
