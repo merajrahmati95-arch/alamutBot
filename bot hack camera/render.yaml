@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: alamut-report-bot
+    runtime: python
+    repo: https://github.com/your-username/your-repo
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: 8950711880:AAGR7MfmyvSHpfn2NS_A8I1gwzgPUE0HI2w
+        sync: false
+      - key: PORT
+        value: 8080
+      - key: @gogoliipyubot
+        value: AlamutReportBot
