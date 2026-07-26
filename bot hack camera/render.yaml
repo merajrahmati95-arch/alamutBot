@@ -2,15 +2,16 @@ services:
   - type: web
     name: alamut-report-bot
     runtime: python
-    repo: https://github.com/your-username/your-repo
+    repo: https://github.com/merajrahmati95-arch/alamutBot
     plan: free
     region: frankfurt
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
-      - key: 8950711880:AAGR7MfmyvSHpfn2NS_A8I1gwzgPUE0HI2w
+      - key: BOT_TOKEN                    # ✅ درست: نام متغیر
+        value: 8950711880:AAGR7MfmyvSHpfn2NS_A8I1gwzgPUE0HI2w   # ✅ درست: توکن
         sync: false
       - key: PORT
         value: 8080
-      - key: @gogoliipyubot
+      - key: BOT_USERNAME
         value: AlamutReportBot
